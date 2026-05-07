@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>产品开发追踪</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', 'PingFang SC', 'Noto Sans SC', sans-serif; background: #FAF9F7; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: translateY(0) } }
+  input, textarea { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ═══════════════════════════════════════════
+   CONFIG
+   ═══════════════════════════════════════════ */
+const STYLES = ["波西米亚", "简约时尚", "田园", "趣味"];
+const STYLE_ICONS = { "波西米亚": "🏜️", "简约时尚": "🔷", "田园": "🌾", "趣味": "🎨" };
+const STATUS_OPTIONS = ["设计中", "打样中", "已打样", "已确认", "量产中"];
+const SAMPLED_SET = new Set(["已打样", "已确认", "量产中"]);
+
+const STATUS_COLORS = {
+  "设计中":  { c: "#9CA3AF", bg: "#F3F4F6" },
+  "打样中":  { c: "#F59E0B", bg: "#FEF3C7" },
+  "已打样":  { c: "#3B82F6", bg: "#DBEAFE" },
+  "已确认":  { c: "#10B981", bg: "#D1FAE5" },
+  "量产中":  { c: "#8B5CF6", bg: "#EDE9FE" },
+};
+
+/* ═══════════════════════════════════════════
+   DEFAULT DATA
+   ═══════════════════════════════════════════ */
+const DEFAULT_PRODUCTS = [
+  {
+    id: "BX-001", style: "波西米亚", fabricName: "民族风提花棉麻",
+    mainImage: null, mainColor: "#8B6F4E",
+    variants: [
+      { id: "BX-001-A", name: "方形窝", image: null, status: "已打样",
+        timeline: [
+          { date: "04/10", event: "设计稿完成", done: true },
+          { date: "04/18", event: "面料确认", done: true },
+          { date: "04/25", event: "初版打样", done: true },
+          { date: "05/02", event: "样品确认", done: false },
+        ]},
+      { id: "BX-001-B", name: "圆形垫", image: null, status: "已打样",
+        timeline: [
+          { date: "04/10", event: "设计稿完成", done: true },
+          { date: "04/20", event: "初版打样", done: true },
+          { date: "05/05", event: "样品确认", done: false },
+        ]},
+      { id: "BX-001-C", name: "沙发型", image: null, status: "打样中",
+        timeline: [
+          { date: "04/10", event: "设计稿完成", done: true },
+          { date: "05/08", event: "初版打样", done: false },
+        ]},
+      { id: "BX-001-D", name: "蛋形窝", image: null, status: "设计中",
+        timeline: [
+          { date: "04/15", event: "设计稿完成", done: true },
+        ]},
+    ],
+  },
+  {
+    id: "BX-002", style: "波西米亚", fabricName: "波西米亚条纹棉",
+    mainImage: null, mainColor: "#A0522D",
+    variants: [
+      { id: "BX-002-A", name: "长条垫", image: null, status: "已确认",
+        timeline: [
+          { date: "03/20", event: "设计稿完成", done: true },
+          { date: "03/28", event: "初版打样", done: true },
+          { date: "04/12", event: "二版打样", done: true },
+          { date: "04/18", event: "样品确认", done: true },
+        ]},
+      { id: "BX-002-B", name: "方形窝", image: null, status: "已确认",
+        timeline: [
+          { date: "03/20", event: "设计稿完成", done: true },
+          { date: "04/01", event: "初版打样", done: true },
+          { date: "04/18", event: "样品确认", done: true },
+        ]},
+    ],
+  },
+  {
+    id: "JY-001", style: "简约时尚", fabricName: "深蓝牛仔帆布",
+    mainImage: null, mainColor: "#1B3A5C",
+    variants: [
+      { id: "JY-001-A", name: "方形窝", image: null, status: "已打样",
+        timeline: [
+          { date: "04/01", event: "设计稿完成", done: true },
+          { date: "04/15", event: "初版打样", done: true },
+          { date: "04/28", event: "样品确认", done: false },
+        ]},
+      { id: "JY-001-B", name: "圆形垫", image: null, status: "打样中",
+        timeline: [
+          { date: "04/05", event: "设计稿完成", done: true },
+          { date: "05/01", event: "初版打样", done: false },
+        ]},
+    ],
+  },
+  {
+    id: "TY-001", style: "田园", fabricName: "奶牛纹仿皮绒",
+    mainImage: null, mainColor: "#6B5B4E",
+    variants: [
+      { id: "TY-001-A", name: "方形窝", image: null, status: "已打样",
+        timeline: [
+          { date: "04/05", event: "设计稿完成", done: true },
+          { date: "04/20", event: "初版打样", done: true },
+          { date: "05/01", event: "样品确认", done: false },
+        ]},
+    ],
+  },
+  {
+    id: "TY-002", style: "田园", fabricName: "复古条纹棉麻",
+    mainImage: null, mainColor: "#8FBC8F",
+    variants: [
+      { id: "TY-002-A", name: "方形窝", image: null, status: "量产中",
+        timeline: [
+          { date: "03/01", event: "设计稿完成", done: true },
+          { date: "03/15", event: "初版打样", done: true },
+          { date: "03/28", event: "样品确认", done: true },
+          { date: "04/10", event: "下单量产", done: true },
+        ]},
+      { id: "TY-002-B", name: "长条垫", image: null, status: "设计中",
+        timeline: [
+          { date: "04/01", event: "设计稿草图", done: true },
+        ]},
+    ],
+  },
+  {
+    id: "QW-001", style: "趣味", fabricName: "彩虹条纹绒",
+    mainImage: null, mainColor: "#FF6B6B",
+    variants: [
+      { id: "QW-001-A", name: "鲨鱼窝", image: null, status: "打样中",
+        timeline: [
+          { date: "04/20", event: "设计稿完成", done: true },
+          { date: "05/05", event: "初版打样", done: false },
+        ]},
+    ],
+  },
+];
+
+/* ═══════════════════════════════════════════
+   IMAGE UTILS
+   ═══════════════════════════════════════════ */
+function fileToBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+function ImageUploadBox({ image, onImageChange, size = 120, label = "点击上传图片" }) {
+  const inputRef = useRef(null);
+  const handleChange = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const base64 = await fileToBase64(file);
+      onImageChange(base64);
+    }
+  };
+  return (
+    <div onClick={() => inputRef.current.click()} style={{
+      width: size, height: size, borderRadius: 12,
+      border: image ? "none" : "2px dashed #D1D5DB",
+      background: image ? "none" : "#F9F9F8",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      cursor: "pointer", overflow: "hidden", flexShrink: 0,
+      position: "relative",
+    }}>
+      {image ? (
+        <img src={image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <div style={{ textAlign: "center", color: "#BBB", fontSize: 11, padding: 8 }}>
+          <div style={{ fontSize: 22, marginBottom: 4 }}>📷</div>
+          {label}
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleChange}
+        style={{ display: "none" }} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   VARIANT THUMBNAIL
+   ═══════════════════════════════════════════ */
+function VariantThumb({ variant, size = 40, onClick, selected }) {
+  const isSampled = SAMPLED_SET.has(variant.status);
+  return (
+    <div onClick={onClick} style={{
+      width: size, height: size, borderRadius: 10,
+      background: "#F5F3F0",
+      border: selected ? "2px solid #1A1A1A" : "1.5px solid #E8E5E0",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      cursor: onClick ? "pointer" : "default",
+      position: "relative", flexShrink: 0, overflow: "hidden",
+      transition: "all 0.15s",
+    }}>
+      {variant.image ? (
+        <img src={variant.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <span style={{ fontSize: size * 0.45, color: "#AAA" }}>📷</span>
+      )}
+      {isSampled && (
+        <div style={{
+          position: "absolute", top: -1, right: -1,
+          width: 15, height: 15, borderRadius: "50%",
+          background: "#10B981", border: "2px solid #fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <span style={{ color: "#fff", fontSize: 8, fontWeight: 900 }}>✓</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   PRODUCT CARD
+   ═══════════════════════════════════════════ */
+function ProductCard({ product, onClick }) {
+  const sampledCount = product.variants.filter(v => SAMPLED_SET.has(v.status)).length;
+  const totalCount = product.variants.length;
+
+  return (
+    <div onClick={onClick} style={{
+      background: "#fff", borderRadius: 16, overflow: "hidden",
+      cursor: "pointer", border: "1px solid #E8E5E0",
+      transition: "all 0.2s ease",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+    }}
+    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.1)"; }}
+    onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)"; }}
+    >
+      {/* Main image */}
+      <div style={{
+        height: 150, display: "flex", alignItems: "center", justifyContent: "center",
+        background: product.mainImage ? "none" : `linear-gradient(135deg, ${product.mainColor}15, ${product.mainColor}28)`,
+        position: "relative", overflow: "hidden",
+      }}>
+        {product.mainImage ? (
+          <img src={product.mainImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <span style={{ fontSize: 48, opacity: 0.3 }}>📷</span>
+        )}
+        {sampledCount > 0 && (
+          <div style={{
+            position: "absolute", top: 10, right: 10,
+            background: "#10B981", color: "#fff",
+            borderRadius: 20, padding: "3px 10px",
+            fontSize: 11, fontWeight: 700,
+            boxShadow: "0 2px 6px rgba(16,185,129,0.3)",
+          }}>
+            {sampledCount}/{totalCount} 已打样
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div style={{ padding: "12px 14px 14px" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#1A1A1A", marginBottom: 2 }}>
+          {product.fabricName}
+        </div>
+        <div style={{ fontSize: 11, color: "#AAA", marginBottom: 10 }}>{product.id}</div>
+
+        {/* Variant thumbnails */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {product.variants.map(v => (
+            <VariantThumb key={v.id} variant={v} size={36} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   DETAIL MODAL
+   ═══════════════════════════════════════════ */
+function DetailModal({ product, onClose, onUpdate }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  if (!product) return null;
+
+  const v = product.variants[activeIdx];
+  const sc = STATUS_COLORS[v.status];
+
+  const updateVariantImage = async (file) => {
+    const base64 = await fileToBase64(file);
+    const updated = { ...product };
+    updated.variants = [...product.variants];
+    updated.variants[activeIdx] = { ...v, image: base64 };
+    onUpdate(updated);
+  };
+
+  const toggleStep = (stepIdx) => {
+    const updated = { ...product };
+    updated.variants = [...product.variants];
+    const newTimeline = [...v.timeline];
+    newTimeline[stepIdx] = { ...newTimeline[stepIdx], done: !newTimeline[stepIdx].done };
+    updated.variants[activeIdx] = { ...v, timeline: newTimeline };
+    onUpdate(updated);
+  };
+
+  const changeStatus = (newStatus) => {
+    const updated = { ...product };
+    updated.variants = [...product.variants];
+    updated.variants[activeIdx] = { ...v, status: newStatus };
+    onUpdate(updated);
+  };
+
+  const addStep = () => {
+    const today = new Date();
+    const dateStr = `${String(today.getMonth()+1).padStart(2,"0")}/${String(today.getDate()).padStart(2,"0")}`;
+    const updated = { ...product };
+    updated.variants = [...product.variants];
+    const newTimeline = [...v.timeline, { date: dateStr, event: "新进度", done: false }];
+    updated.variants[activeIdx] = { ...v, timeline: newTimeline };
+    onUpdate(updated);
+  };
+
+  const imgInputRef = useRef(null);
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 16, animation: "fadeIn 0.2s ease",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 20, maxWidth: 500, width: "100%",
+        maxHeight: "88vh", overflow: "auto",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+        animation: "slideUp 0.25s ease",
+      }}>
+
+        {/* Header */}
+        <div style={{
+          padding: "18px 22px 14px",
+          borderBottom: "1px solid #F0EEEB",
+          display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+        }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#AAA" }}>{product.id}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#1A1A1A" }}>{product.fabricName}</div>
+          </div>
+          <button onClick={onClose} style={{
+            width: 30, height: 30, borderRadius: 10, border: "none",
+            background: "#F0EEEB", cursor: "pointer", fontSize: 15,
+            display: "flex", alignItems: "center", justifyContent: "center", color: "#666",
+          }}>✕</button>
+        </div>
+
+        {/* Variant selector */}
+        <div style={{ padding: "14px 22px 0" }}>
+          <div style={{ fontSize: 11, color: "#AAA", marginBottom: 8, fontWeight: 600 }}>
+            点击切换款式查看进度
+          </div>
+          <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6 }}>
+            {product.variants.map((vr, idx) => {
+              const active = idx === activeIdx;
+              const vsc = STATUS_COLORS[vr.status];
+              return (
+                <div key={vr.id} onClick={() => setActiveIdx(idx)} style={{
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+                  padding: "8px 10px", borderRadius: 14,
+                  background: active ? "#1A1A1A" : "#F8F7F5",
+                  border: active ? "none" : "1px solid #E8E5E0",
+                  cursor: "pointer", minWidth: 68, flexShrink: 0,
+                  transition: "all 0.15s",
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 8, overflow: "hidden",
+                    background: "#F0EEEB", display: "flex", alignItems: "center", justifyContent: "center",
+                    position: "relative",
+                  }}>
+                    {vr.image ? (
+                      <img src={vr.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <span style={{ fontSize: 14, color: "#CCC" }}>📷</span>
+                    )}
+                    {SAMPLED_SET.has(vr.status) && (
+                      <div style={{
+                        position: "absolute", top: -2, right: -2,
+                        width: 13, height: 13, borderRadius: "50%",
+                        background: "#10B981", border: `2px solid ${active ? "#1A1A1A" : "#F8F7F5"}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <span style={{ color: "#fff", fontSize: 7, fontWeight: 900 }}>✓</span>
+                      </div>
+                    )}
+                  </div>
+                  <span style={{
+                    fontSize: 11, fontWeight: 600,
+                    color: active ? "#fff" : "#555", whiteSpace: "nowrap",
+                  }}>{vr.name}</span>
+                  <span style={{
+                    fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 6,
+                    color: vsc.c, background: active ? "rgba(255,255,255,0.15)" : vsc.bg,
+                  }}>{vr.status}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Active variant detail */}
+        <div style={{ padding: "18px 22px 24px" }}>
+
+          {/* Variant header with image */}
+          <div style={{
+            display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 18,
+          }}>
+            {/* Variant image - clickable to upload */}
+            <div onClick={() => imgInputRef.current.click()} style={{
+              width: 80, height: 80, borderRadius: 12, overflow: "hidden",
+              background: "#F5F3F0", border: "1.5px solid #E8E5E0",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0, position: "relative",
+            }}>
+              {v.image ? (
+                <>
+                  <img src={v.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    background: "rgba(0,0,0,0.3)", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    opacity: 0, transition: "opacity 0.2s",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                  onMouseLeave={e => e.currentTarget.style.opacity = 0}
+                  >
+                    <span style={{ color: "#fff", fontSize: 12, fontWeight: 600 }}>更换</span>
+                  </div>
+                </>
+              ) : (
+                <div style={{ textAlign: "center", color: "#CCC", fontSize: 10 }}>
+                  <div style={{ fontSize: 20, marginBottom: 2 }}>📷</div>
+                  上传图片
+                </div>
+              )}
+              <input ref={imgInputRef} type="file" accept="image/*"
+                onChange={e => e.target.files[0] && updateVariantImage(e.target.files[0])}
+                style={{ display: "none" }} />
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#1A1A1A" }}>{v.name}</div>
+              <div style={{ fontSize: 11, color: "#AAA", marginBottom: 8 }}>{v.id}</div>
+              {/* Status selector */}
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {STATUS_OPTIONS.map(s => {
+                  const active = v.status === s;
+                  const ssc = STATUS_COLORS[s];
+                  return (
+                    <button key={s} onClick={() => changeStatus(s)} style={{
+                      padding: "3px 8px", borderRadius: 6, fontSize: 10, fontWeight: 600,
+                      border: "none", cursor: "pointer",
+                      background: active ? ssc.c : "#F0F0F0",
+                      color: active ? "#fff" : "#999",
+                      transition: "all 0.15s",
+                    }}>{s}</button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Timeline */}
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A1A", marginBottom: 14 }}>
+            📋 打样进度
+          </div>
+          <div style={{ position: "relative", paddingLeft: 24 }}>
+            <div style={{
+              position: "absolute", left: 8, top: 8, bottom: 8,
+              width: 2, background: "#E8E5E0", borderRadius: 1,
+            }} />
+            {v.timeline.map((step, i) => {
+              const isLast = i === v.timeline.length - 1;
+              return (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  paddingBottom: isLast ? 0 : 18, position: "relative",
+                }}>
+                  <div onClick={() => toggleStep(i)} style={{
+                    position: "absolute", left: -20,
+                    width: 18, height: 18, borderRadius: "50%",
+                    background: step.done ? "#10B981" : "#E8E5E0",
+                    border: `3px solid ${step.done ? "#D1FAE5" : "#F5F5F5"}`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    zIndex: 1, cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}>
+                    {step.done && <span style={{ color: "#fff", fontSize: 9, fontWeight: 900 }}>✓</span>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <span style={{
+                      fontSize: 14, fontWeight: step.done ? 600 : 400,
+                      color: step.done ? "#1A1A1A" : "#CCC",
+                    }}>{step.event}</span>
+                  </div>
+                  <span style={{
+                    fontSize: 12, color: step.done ? "#999" : "#DDD",
+                    fontVariantNumeric: "tabular-nums", fontWeight: 500,
+                  }}>{step.date}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Add step button */}
+          <button onClick={addStep} style={{
+            marginTop: 14, marginLeft: 24, padding: "6px 14px",
+            borderRadius: 8, border: "1.5px dashed #D1D5DB",
+            background: "transparent", color: "#AAA",
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "#999"; e.currentTarget.style.color = "#666"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "#D1D5DB"; e.currentTarget.style.color = "#AAA"; }}
+          >+ 添加进度节点</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ADD PRODUCT MODAL
+   ═══════════════════════════════════════════ */
+function AddModal({ onClose, onAdd, activeStyle }) {
+  const [fabricName, setFabricName] = useState("");
+  const [mainImage, setMainImage] = useState(null);
+  const [variantNames, setVariantNames] = useState(["方形窝"]);
+  const [newVariant, setNewVariant] = useState("");
+
+  const addVariant = () => {
+    if (newVariant.trim()) {
+      setVariantNames(prev => [...prev, newVariant.trim()]);
+      setNewVariant("");
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!fabricName.trim()) return;
+    const id = `${activeStyle.charAt(0)}-${Date.now().toString(36).toUpperCase()}`;
+    const today = new Date();
+    const dateStr = `${String(today.getMonth()+1).padStart(2,"0")}/${String(today.getDate()).padStart(2,"0")}`;
+    onAdd({
+      id, style: activeStyle, fabricName: fabricName.trim(),
+      mainImage, mainColor: "#888888",
+      variants: variantNames.map((name, i) => ({
+        id: `${id}-${String.fromCharCode(65+i)}`,
+        name, image: null, status: "设计中",
+        timeline: [{ date: dateStr, event: "新增款式", done: true }],
+      })),
+    });
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100,
+      background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 16, animation: "fadeIn 0.2s ease",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 20, maxWidth: 440, width: "100%",
+        padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+        animation: "slideUp 0.25s ease", maxHeight: "85vh", overflow: "auto",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: "#1A1A1A" }}>
+            添加新款 · {activeStyle}
+          </h3>
+          <button onClick={onClose} style={{
+            width: 30, height: 30, borderRadius: 10, border: "none",
+            background: "#F0EEEB", cursor: "pointer", fontSize: 15,
+            display: "flex", alignItems: "center", justifyContent: "center", color: "#666",
+          }}>✕</button>
+        </div>
+
+        {/* Main image upload */}
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#666", marginBottom: 8, display: "block" }}>
+          主图
+        </label>
+        <div style={{ marginBottom: 18 }}>
+          <ImageUploadBox image={mainImage} onImageChange={setMainImage} size={100} />
+        </div>
+
+        {/* Fabric name */}
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#666", marginBottom: 6, display: "block" }}>
+          面料名称
+        </label>
+        <input value={fabricName} onChange={e => setFabricName(e.target.value)}
+          placeholder="如：民族风提花棉麻"
+          style={{
+            width: "100%", padding: "10px 14px", borderRadius: 10,
+            border: "1.5px solid #E8E5E0", fontSize: 14, outline: "none",
+            marginBottom: 18,
+          }}
+          onFocus={e => e.target.style.borderColor = "#1A1A1A"}
+          onBlur={e => e.target.style.borderColor = "#E8E5E0"}
+        />
+
+        {/* Variants */}
+        <label style={{ fontSize: 12, fontWeight: 600, color: "#666", marginBottom: 8, display: "block" }}>
+          款式
+        </label>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {variantNames.map((name, i) => (
+            <span key={i} style={{
+              padding: "5px 10px", borderRadius: 8,
+              background: "#F5F3F0", border: "1px solid #E8E5E0",
+              fontSize: 12, fontWeight: 500, color: "#555",
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              {name}
+              {variantNames.length > 1 && (
+                <span onClick={() => setVariantNames(p => p.filter((_,j)=>j!==i))}
+                  style={{ cursor: "pointer", color: "#CCC", fontWeight: 700, fontSize: 14 }}>×</span>
+              )}
+            </span>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+          <input value={newVariant} onChange={e => setNewVariant(e.target.value)}
+            placeholder="添加款式" onKeyDown={e => e.key === "Enter" && addVariant()}
+            style={{
+              flex: 1, padding: "8px 12px", borderRadius: 10,
+              border: "1.5px solid #E8E5E0", fontSize: 13, outline: "none",
+            }}
+            onFocus={e => e.target.style.borderColor = "#1A1A1A"}
+            onBlur={e => e.target.style.borderColor = "#E8E5E0"}
+          />
+          <button onClick={addVariant} style={{
+            padding: "8px 16px", borderRadius: 10, border: "none",
+            background: "#F0EEEB", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#555",
+          }}>+ 添加</button>
+        </div>
+
+        <button onClick={handleSubmit} disabled={!fabricName.trim()} style={{
+          width: "100%", padding: "12px 0", borderRadius: 12, border: "none",
+          background: fabricName.trim() ? "#1A1A1A" : "#E8E5E0",
+          color: fabricName.trim() ? "#fff" : "#AAA",
+          fontSize: 15, fontWeight: 700, cursor: fabricName.trim() ? "pointer" : "default",
+        }}>确认添加</button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   MAIN APP
+   ═══════════════════════════════════════════ */
+function App() {
+  const [activeStyle, setActiveStyle] = useState("波西米亚");
+  const [products, setProducts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("pet_product_tracker");
+      return saved ? JSON.parse(saved) : DEFAULT_PRODUCTS;
+    } catch { return DEFAULT_PRODUCTS; }
+  });
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+
+  // Auto-save
+  useEffect(() => {
+    try { localStorage.setItem("pet_product_tracker", JSON.stringify(products)); } catch {}
+  }, [products]);
+
+  const styleProducts = products.filter(p => p.style === activeStyle);
+  const sampled = styleProducts.filter(p => p.variants.some(v => SAMPLED_SET.has(v.status)));
+  const notSampled = styleProducts.filter(p => !p.variants.some(v => SAMPLED_SET.has(v.status)));
+
+  const addProduct = (p) => setProducts(prev => [...prev, p]);
+
+  const updateProduct = (updated) => {
+    setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+    setSelectedProduct(updated);
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#FAF9F7" }}>
+      {/* Header */}
+      <div style={{ padding: "18px 20px 0", background: "#fff", borderBottom: "1px solid #E8E5E0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div>
+            <h1 style={{ fontSize: 19, fontWeight: 800, color: "#1A1A1A" }}>产品开发追踪</h1>
+            <p style={{ fontSize: 11, color: "#AAA", marginTop: 2 }}>
+              共 {products.length} 个系列 · {products.reduce((s,p) => s + p.variants.length, 0)} 个款式
+            </p>
+          </div>
+          <button onClick={() => setShowAdd(true)} style={{
+            padding: "8px 16px", borderRadius: 10, border: "none",
+            background: "#1A1A1A", color: "#fff",
+            fontSize: 13, fontWeight: 600, cursor: "pointer",
+          }}>+ 新增</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 0, overflowX: "auto" }}>
+          {STYLES.map(s => {
+            const active = s === activeStyle;
+            const count = products.filter(p => p.style === s).length;
+            return (
+              <button key={s} onClick={() => setActiveStyle(s)} style={{
+                padding: "10px 14px", border: "none", cursor: "pointer",
+                fontSize: 13, fontWeight: active ? 700 : 500,
+                color: active ? "#1A1A1A" : "#AAA",
+                background: "transparent", whiteSpace: "nowrap",
+                borderBottom: active ? "2.5px solid #1A1A1A" : "2.5px solid transparent",
+                display: "flex", alignItems: "center", gap: 5,
+              }}>
+                <span>{STYLE_ICONS[s]}</span>{s}
+                <span style={{
+                  fontSize: 10, fontWeight: 600,
+                  color: active ? "#fff" : "#CCC",
+                  background: active ? "#1A1A1A" : "#F0F0F0",
+                  padding: "1px 7px", borderRadius: 10,
+                }}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "18px 20px 40px" }}>
+        {sampled.length > 0 && (
+          <>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: "#10B981",
+              marginBottom: 10, display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981" }} />
+              已打样 ({sampled.length})
+            </div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+              gap: 12, marginBottom: 24,
+            }}>
+              {sampled.map(p => <ProductCard key={p.id} product={p} onClick={() => setSelectedProduct(p)} />)}
+            </div>
+          </>
+        )}
+
+        {notSampled.length > 0 && (
+          <>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: "#AAA",
+              marginBottom: 10, display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#D1D5DB" }} />
+              设计款式 ({notSampled.length})
+            </div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+              gap: 12,
+            }}>
+              {notSampled.map(p => <ProductCard key={p.id} product={p} onClick={() => setSelectedProduct(p)} />)}
+            </div>
+          </>
+        )}
+
+        {styleProducts.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 0", color: "#CCC", fontSize: 14 }}>
+            暂无产品，点击"+ 新增"添加
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      {selectedProduct && (
+        <DetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onUpdate={updateProduct} />
+      )}
+      {showAdd && (
+        <AddModal activeStyle={activeStyle} onClose={() => setShowAdd(false)} onAdd={addProduct} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
